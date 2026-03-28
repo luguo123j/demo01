@@ -40,7 +40,9 @@ async function searchNovel() {
 
         if (data.success && data.novels && data.novels.length > 0) {
             renderResults(data.novels);
-            searchStatus.textContent = `找到 ${data.novels.length} 本小说`;
+            const sourceSummary = buildSourceSummary(data.sources || []);
+            const degradedSuffix = data.partial_success ? `，部分来源异常：${data.degraded_reason || '已自动降级'}` : '';
+            searchStatus.textContent = `找到 ${data.novels.length} 本小说（${sourceSummary}）${degradedSuffix}`;
             searchStatus.className = 'status-text success';
         } else {
             showAlert(`没有找到与"${keyword}"相关的小说`, 'error');
@@ -56,6 +58,15 @@ async function searchNovel() {
     } finally {
         searchBtn.disabled = false;
     }
+}
+
+function buildSourceSummary(sources) {
+    if (!sources || sources.length === 0) {
+        return '未返回来源信息';
+    }
+
+    const okCount = sources.filter(source => source.success).length;
+    return `${okCount}/${sources.length} 来源可用`;
 }
 
 // Render search results
