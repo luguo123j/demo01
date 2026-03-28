@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>小说爬虫 - Novel Crawler</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>小说爬虫</h1>
+            <p class="subtitle">Novel Crawler - Download your favorite novels</p>
+        </header>
+
+        <main>
+            <!-- Search Section -->
+            <section class="search-section">
+                <div class="search-box">
+                    <input
+                        type="text"
+                        id="searchInput"
+                        placeholder="请输入小说名称..."
+                        autocomplete="off"
+                    >
+                    <button id="searchBtn" onclick="searchNovel()">
+                        <span>搜索</span>
+                    </button>
+                </div>
+                <div id="searchStatus" class="status-text"></div>
+            </section>
+
+            <!-- Search Results Section -->
+            <section id="resultsSection" class="results-section hidden">
+                <h2>搜索结果</h2>
+                <div id="resultsContainer" class="results-container"></div>
+            </section>
+
+            <!-- Download Progress Section -->
+            <section id="progressSection" class="progress-section hidden">
+                <h2>下载进度</h2>
+                <div class="progress-card">
+                    <div class="progress-info">
+                        <h3 id="progressTitle">下载中...</h3>
+                        <p id="progressDetails">准备下载</p>
+                    </div>
+                    <div class="progress-bar-container">
+                        <div id="progressBar" class="progress-bar"></div>
+                    </div>
+                    <div class="progress-percentage">
+                        <span id="progressPercentage">0%</span>
+                    </div>
+
+                    <!-- Download Control Buttons -->
+                    <div class="download-controls" id="downloadControls">
+                        <button id="pauseBtn" class="control-btn pause-btn" onclick="pauseDownload()">
+                            <span>暂停下载</span>
+                        </button>
+                        <button id="stopBtn" class="control-btn stop-btn" onclick="stopDownload()">
+                            <span>停止下载</span>
+                        </button>
+                    </div>
+
+                    <div id="downloadComplete" class="download-complete hidden">
+                        <p>下载完成！</p>
+                        <button id="downloadFileBtn" onclick="downloadFile()">下载文件</button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Download History Section -->
+            <section class="history-section">
+                <h2>下载历史</h2>
+                <div id="historyContainer" class="history-container">
+                    <p class="empty-message">暂无下载历史</p>
+                </div>
+                <button class="refresh-btn" onclick="loadHistory()">刷新历史</button>
+            </section>
+        </main>
+
+        <footer>
+            <p>&copy; 2024 Novel Crawler. Please respect website terms of service.</p>
+        </footer>
+    </div>
+
+    <!-- Alert Modal -->
+    <div id="alertModal" class="modal hidden">
+        <div class="modal-content">
+            <h3 id="alertTitle">提示</h3>
+            <p id="alertMessage"></p>
+            <button onclick="closeAlert()">确定</button>
+        </div>
+    </div>
+
+    <!-- Chapter Range Modal -->
+    <div id="chapterRangeModal" class="modal hidden">
+        <div class="modal-content">
+            <h3>选择章节范围</h3>
+            <p>请输入要下载的章节范围</p>
+            <div class="chapter-range-inputs">
+                <div>
+                    <label>起始章节:</label>
+                    <input type="number" id="startChapter" min="1" value="1">
+                </div>
+                <div>
+                    <label>结束章节:</label>
+                    <input type="number" id="endChapter" min="1" placeholder="全部章节">
+                </div>
+            </div>
+            <div class="modal-buttons">
+                <button class="modal-btn-cancel" onclick="closeChapterRangeModal()">取消</button>
+                <button class="modal-btn-confirm" onclick="confirmChapterRange()">确定</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>
