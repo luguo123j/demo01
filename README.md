@@ -1,13 +1,16 @@
 # 小说爬虫应用 (Novel Crawler)
 
-一个基于 Flask 的小说爬取应用，可以从免费小说网站搜索并下载小说内容。
+一个基于 Flask 的多来源小说爬取应用，可以聚合多个站点搜索并下载小说内容。
 
 ## 功能特性
 
 - 🔍 **搜索功能**: 输入小说名称进行搜索
+- 🌐 **多源聚合**: 支持多来源并发搜索、去重和排序
 - 📥 **下载功能**: 一键下载整本小说为 TXT 文件
+- 🔁 **自动回退**: 章节下载失败时自动尝试其他来源补齐
 - 📊 **进度显示**: 实时显示下载进度
 - 📜 **下载历史**: 查看下载历史记录
+- 🩺 **可观测性**: 来源健康检查和运行指标接口
 - 🎨 **美观界面**: 响应式设计，简洁易用
 - ⚠️ **错误处理**: 友好的错误提示
 
@@ -95,6 +98,27 @@ demo01/
 - `DOWNLOAD_DIR`: 小说文件保存目录
 - `FL_PORT`: Flask 应用端口
 
+多来源配置示例:
+
+```python
+SOURCES = {
+    'bqg353': {
+        'enabled': True,
+        'adapter': 'bqg353_api',
+        'display_name': '笔趣阁 353',
+        'base_url': 'https://www.bqg353.xyz',
+        'weight': 100,
+    },
+    'bqg356': {
+        'enabled': True,
+        'adapter': 'bqg353_api',
+        'display_name': '笔趣阁 356',
+        'base_url': 'https://www.bqg356.cc',
+        'weight': 90,
+    }
+}
+```
+
 ## 注意事项
 
 1. 请遵守目标网站的 robots.txt 和服务条款
@@ -106,8 +130,8 @@ demo01/
 
 ### 搜索接口
 - **URL**: `GET /api/search`
-- **参数**: `keyword` (搜索关键词)
-- **返回**: JSON 格式的搜索结果，包含 `novels`、`sources`、`partial_success`
+- **参数**: `keyword` (必填)、`source_id` (可选)、`limit` (可选)、`only_available` (可选)
+- **返回**: JSON 格式的搜索结果，包含 `novels`、`sources`、`partial_success`、`degraded_reason`
 
 ### 下载接口
 - **URL**: `POST /api/download`
@@ -116,7 +140,20 @@ demo01/
 
 ### 状态查询接口
 - **URL**: `GET /api/status/<task_id>`
-- **返回**: JSON 格式的下载状态
+- **返回**: JSON 格式的下载状态，包含来源信息与补齐统计字段
+
+### 来源列表接口
+- **URL**: `GET /api/sources`
+- **返回**: JSON 格式的来源配置与启用状态
+
+### 来源健康检查接口
+- **URL**: `GET /api/health/sources`
+- **参数**: `keyword` (可选，默认 `武动`)
+- **返回**: JSON 格式的来源可用性检测结果
+
+### 指标接口
+- **URL**: `GET /api/metrics`
+- **返回**: JSON 格式的搜索/下载成功率与来源时延指标
 
 ### 下载历史接口
 - **URL**: `GET /api/history`

@@ -43,6 +43,9 @@ class DownloadHistory:
         file_path: str,
         chapter_count: int = 0,
         source_id: str = None,
+        complete_ratio: float = 100.0,
+        recovered_chapters: int = 0,
+        missing_chapters: int = 0,
     ):
         """
         Add record to download history
@@ -59,6 +62,9 @@ class DownloadHistory:
             'file_path': file_path,
             'chapter_count': chapter_count,
             'source_id': source_id,
+            'complete_ratio': complete_ratio,
+            'recovered_chapters': recovered_chapters,
+            'missing_chapters': missing_chapters,
             'download_time': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         }
         self.history.append(record)

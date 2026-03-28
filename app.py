@@ -7,6 +7,8 @@ from werkzeug.exceptions import HTTPException
 import config
 from services.search_service import search_novel
 from services.download_service import download_novel, get_download_status, get_download_history, pause_download, resume_download, stop_download
+from services.health_service import check_sources_health
+from services.metrics_service import metrics_store
 
 # Configure logging
 logging.basicConfig(
@@ -53,8 +55,19 @@ def api_search():
                 'error': 'Please enter a novel name'
             }), 400
 
-        logger.info(f"Search request: {keyword}")
-        result = search_novel(keyword)
+        source_id = request.args.get('source_id', '').strip() or None
+        limit = int(request.args.get('limit', 30))
+        only_available = request.args.get('only_available', '0').strip().lower() in {'1', 'true', 'yes'}
+
+        logger.info(
+            f"Search request: {keyword} (source={source_id or 'all'}, limit={limit}, only_available={only_available})"
+        )
+        result = search_novel(
+            keyword,
+            source_id=source_id,
+            limit=limit,
+            only_available=only_available,
+        )
 
         if result['success']:
             return jsonify(result)
@@ -246,6 +259,62 @@ def api_history():
 
     except Exception as e:
         logger.error(f"History API error: {e}")
+        return jsonify({
+            'success': False,
+            'error': 'Internal server error'
+        }), 500
+
+
+@app.route('/api/sources', methods=['GET'])
+def api_sources():
+    """List configured source metadata for frontend filtering and diagnostics."""
+    try:
+        sources = []
+        for source_id, source_cfg in config.SOURCES.items():
+            sources.append({
+                'source_id': source_id,
+                'source_name': source_cfg.get('display_name', source_id),
+                'enabled': bool(source_cfg.get('enabled', True)),
+                'weight': int(source_cfg.get('weight', 0)),
+            })
+
+        return jsonify({
+            'success': True,
+            'sources': sorted(sources, key=lambda item: item.get('weight', 0), reverse=True)
+        })
+    except Exception as e:
+        logger.error(f"Sources API error: {e}")
+        return jsonify({
+            'success': False,
+            'error': 'Internal server error'
+        }), 500
+
+
+@app.route('/api/health/sources', methods=['GET'])
+def api_source_health():
+    """Run source-level health checks."""
+    try:
+        keyword = request.args.get('keyword', '武动').strip() or '武动'
+        result = check_sources_health(keyword)
+        return jsonify(result)
+    except Exception as e:
+        logger.error(f"Source health API error: {e}")
+        return jsonify({
+            'success': False,
+            'error': 'Internal server error'
+        }), 500
+
+
+@app.route('/api/metrics', methods=['GET'])
+def api_metrics():
+    """Expose in-memory metrics for observability."""
+    try:
+        return jsonify({
+            'success': True,
+            'metrics': metrics_store.snapshot(),
+        })
+    except Exception as e:
+        logger.error(f"Metrics API error: {e}")
         return jsonify({
             'success': False,
             'error': 'Internal server error'

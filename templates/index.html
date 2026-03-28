@@ -27,6 +27,16 @@
                         <span>搜索</span>
                     </button>
                 </div>
+                <div class="search-filters">
+                    <label for="sourceFilter">来源</label>
+                    <select id="sourceFilter">
+                        <option value="">全部来源</option>
+                    </select>
+                    <label class="checkbox-label" for="availableOnlyToggle">
+                        <input type="checkbox" id="availableOnlyToggle">
+                        仅看可下载
+                    </label>
+                </div>
                 <div id="searchStatus" class="status-text"></div>
             </section>
 
@@ -50,6 +60,8 @@
                     <div class="progress-percentage">
                         <span id="progressPercentage">0%</span>
                     </div>
+                    <div id="progressSource" class="progress-source hidden"></div>
+                    <div id="fallbackInfo" class="fallback-info hidden"></div>
 
                     <!-- Download Control Buttons -->
                     <div class="download-controls" id="downloadControls">

@@ -6,6 +6,7 @@ let progressCheckInterval = null;
 let isPaused = false;
 let isStopped = false;
 let pendingNovel = null;
+let sourceOptions = [];
 
 // Search novel function
 async function searchNovel() {
@@ -16,6 +17,8 @@ async function searchNovel() {
     const resultsContainer = document.getElementById('resultsContainer');
 
     const keyword = searchInput.value.trim();
+    const sourceFilter = document.getElementById('sourceFilter').value;
+    const onlyAvailable = document.getElementById('availableOnlyToggle').checked;
 
     if (!keyword) {
         showAlert('请输入小说名称', 'error');
@@ -29,7 +32,17 @@ async function searchNovel() {
     resultsSection.classList.add('hidden');
 
     try {
-        const response = await fetch(`/api/search?keyword=${encodeURIComponent(keyword)}`);
+        const params = new URLSearchParams();
+        params.set('keyword', keyword);
+        params.set('limit', '30');
+        if (sourceFilter) {
+            params.set('source_id', sourceFilter);
+        }
+        if (onlyAvailable) {
+            params.set('only_available', '1');
+        }
+
+        const response = await fetch(`/api/search?${params.toString()}`);
 
         if (!response.ok) {
             const errorData = await response.json();
@@ -335,9 +348,33 @@ function updateProgress(status) {
     const progressBar = document.getElementById('progressBar');
     const progressPercentage = document.getElementById('progressPercentage');
     const downloadComplete = document.getElementById('downloadComplete');
+    const progressSource = document.getElementById('progressSource');
+    const fallbackInfo = document.getElementById('fallbackInfo');
 
     if (status.novel_title) {
         progressTitle.textContent = status.novel_title;
+    }
+
+    if (status.source_id) {
+        progressSource.textContent = `当前主来源: ${status.source_id}`;
+        progressSource.classList.remove('hidden');
+    } else {
+        progressSource.classList.add('hidden');
+    }
+
+    const recovered = status.recovered_chapters || 0;
+    const missing = status.missing_chapters || 0;
+    const attempts = Array.isArray(status.source_attempts) ? status.source_attempts.length : 0;
+    if (recovered > 0 || missing > 0) {
+        fallbackInfo.textContent = `补齐章节: ${recovered}，缺失章节: ${missing}，来源尝试: ${attempts}`;
+        fallbackInfo.classList.remove('hidden');
+    } else {
+        if (attempts > 0 && status.status === 'downloading') {
+            fallbackInfo.textContent = `来源尝试: ${attempts}`;
+            fallbackInfo.classList.remove('hidden');
+        } else {
+            fallbackInfo.classList.add('hidden');
+        }
     }
 
     if (status.status === 'downloading') {
@@ -387,9 +424,7 @@ async function loadHistory() {
         if (data.success && data.history) {
             renderHistory(data.history);
         } else {
-            historyContainer = document.createElement('p');
-            historyContainer.className = 'empty-message';
-            historyContainer.textContent = '暂无下载历史';
+            historyContainer.innerHTML = '<p class="empty-message">暂无下载历史</p>';
         }
 
     } catch (error) {
@@ -425,12 +460,44 @@ function renderHistory(history) {
         meta.className = 'history-item-meta';
         const chapters = item.chapter_count ? `${item.chapter_count}章` : '未知章数';
         const source = item.source_id ? `来源:${item.source_id}` : '来源:默认';
-        meta.textContent = `${chapters} - ${source} - ${item.download_time || '未知时间'}`;
+        const ratio = item.complete_ratio !== undefined ? `完整度:${item.complete_ratio}%` : '';
+        const recovered = item.recovered_chapters ? `补齐:${item.recovered_chapters}` : '补齐:0';
+        meta.textContent = `${chapters} - ${source} - ${ratio} - ${recovered} - ${item.download_time || '未知时间'}`;
 
         historyItem.appendChild(title);
         historyItem.appendChild(meta);
         historyContainer.appendChild(historyItem);
     });
+}
+
+async function loadSources() {
+    try {
+        const response = await fetch('/api/sources');
+        if (!response.ok) {
+            return;
+        }
+
+        const data = await response.json();
+        if (!data.success || !Array.isArray(data.sources)) {
+            return;
+        }
+
+        sourceOptions = data.sources;
+        const sourceFilter = document.getElementById('sourceFilter');
+        sourceFilter.innerHTML = '<option value="">全部来源</option>';
+
+        sourceOptions.forEach(source => {
+            if (!source.enabled) {
+                return;
+            }
+            const option = document.createElement('option');
+            option.value = source.source_id;
+            option.textContent = `${source.source_name} (${source.source_id})`;
+            sourceFilter.appendChild(option);
+        });
+    } catch (error) {
+        console.error('Source list load error:', error);
+    }
 }
 
 // Show alert modal
@@ -459,6 +526,8 @@ function closeAlert() {
 
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', function() {
+    loadSources();
+
     // Load download history
     loadHistory();
 

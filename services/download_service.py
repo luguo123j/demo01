@@ -3,9 +3,11 @@ import logging
 import threading
 import os
 import time
+import re
 from typing import Dict, Optional
 from .source_registry import SourceRegistry
 from .file_service import save_to_txt, DownloadHistory
+from .metrics_service import metrics_store
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +45,8 @@ class DownloadTask:
         self.stopped = False
         self.active_source_id = None
         self.source_attempts = []
+        self.recovered_chapters = 0
+        self.missing_chapter_titles = []
 
 
 def download_novel(
@@ -124,6 +128,27 @@ def _download_worker(task: DownloadTask):
             end_idx = task.end_chapter if task.end_chapter else len(chapters)
             chapters = chapters[task.start_chapter - 1:min(end_idx, len(chapters))]
 
+        task.total_chapters = len(chapters)
+
+        fallback_chapter_refs = {}
+        for adapter in adapters:
+            if adapter.source_id == task.active_source_id:
+                continue
+
+            try:
+                task.source_attempts.append({'source_id': adapter.source_id, 'stage': 'fallback_catalog'})
+                fallback_info = adapter.get_novel_info(task.novel_url)
+                chapter_map = {
+                    _normalize_chapter_key(item.get('title', '')): item
+                    for item in fallback_info.get('chapters', [])
+                }
+                fallback_chapter_refs[adapter.source_id] = {
+                    'adapter': adapter,
+                    'chapter_map': chapter_map,
+                }
+            except Exception as e:
+                logger.warning(f"Fallback source catalog fetch failed ({adapter.source_id}): {e}")
+
         logger.info(f"Downloading {len(chapters)} chapters of: {task.novel_title}")
 
         # Download chapters
@@ -143,11 +168,41 @@ def _download_worker(task: DownloadTask):
                 content = active_adapter.get_chapter_content(chapter)
                 content_dict[chapter['title']] = content
                 task.downloaded_chapters += 1
-                task.progress = int((task.downloaded_chapters / len(chapters)) * 100)
+                task.progress = int((task.downloaded_chapters / max(1, len(chapters))) * 100)
                 logger.debug(f"Downloaded chapter {task.downloaded_chapters}/{len(chapters)}")
             except Exception as e:
-                logger.error(f"Failed to download chapter {chapter['title']}: {e}")
-                # Continue with next chapter
+                recovered = False
+                chapter_key = _normalize_chapter_key(chapter.get('title', ''))
+                logger.warning(f"Primary source chapter failed ({task.active_source_id}, {chapter['title']}): {e}")
+
+                for source_id, fallback_data in fallback_chapter_refs.items():
+                    fallback_chapter = fallback_data['chapter_map'].get(chapter_key)
+                    if not fallback_chapter:
+                        continue
+
+                    fallback_adapter = fallback_data['adapter']
+                    try:
+                        task.source_attempts.append({
+                            'source_id': source_id,
+                            'stage': 'fallback_chapter',
+                            'chapter_title': chapter.get('title', ''),
+                        })
+                        content = fallback_adapter.get_chapter_content(fallback_chapter)
+                        content_dict[chapter['title']] = content
+                        task.downloaded_chapters += 1
+                        task.recovered_chapters += 1
+                        task.progress = int((task.downloaded_chapters / max(1, len(chapters))) * 100)
+                        recovered = True
+                        logger.info(f"Recovered chapter '{chapter.get('title', '')}' from source {source_id}")
+                        break
+                    except Exception as fallback_error:
+                        logger.warning(
+                            f"Fallback chapter failed ({source_id}, {chapter.get('title', '')}): {fallback_error}"
+                        )
+
+                if not recovered:
+                    task.missing_chapter_titles.append(chapter.get('title', ''))
+                    logger.error(f"Failed to download chapter {chapter['title']} from all sources")
 
         # Only save if not stopped
         if not task.stopped:
@@ -155,9 +210,21 @@ def _download_worker(task: DownloadTask):
             filepath = save_to_txt(task.novel_title, chapters, content_dict)
             task.filename = os.path.basename(filepath)
 
+            missing_count = max(0, len(chapters) - len(content_dict))
+            complete_ratio = round((len(content_dict) / max(1, len(chapters))) * 100, 2)
+
             # Add to download history
             history = DownloadHistory()
-            history.add(task.novel_title, task.novel_url, filepath, len(chapters), task.active_source_id)
+            history.add(
+                task.novel_title,
+                task.novel_url,
+                filepath,
+                len(chapters),
+                task.active_source_id,
+                complete_ratio=complete_ratio,
+                recovered_chapters=task.recovered_chapters,
+                missing_chapters=missing_count,
+            )
 
             task.status = 'completed'
             task.progress = 100
@@ -166,12 +233,18 @@ def _download_worker(task: DownloadTask):
                 'filepath': filepath,
                 'chapter_count': len(chapters),
                 'source_id': task.active_source_id,
+                'complete_ratio': complete_ratio,
+                'recovered_chapters': task.recovered_chapters,
+                'missing_chapters': missing_count,
+                'missing_chapter_titles': task.missing_chapter_titles,
             }
             logger.info(f"Download completed: {task.filename}")
+            metrics_store.record_download(True)
     except Exception as e:
         logger.error(f"Download failed: {e}")
         task.status = 'error'
         task.error = str(e)
+        metrics_store.record_download(False)
     finally:
         if registry:
             registry.close_all()
@@ -244,9 +317,19 @@ def get_download_status(task_id: str) -> Optional[Dict]:
             'novel_title': task.novel_title,
             'source_id': task.active_source_id,
             'source_attempts': task.source_attempts,
+            'recovered_chapters': task.recovered_chapters,
+            'missing_chapters': len(task.missing_chapter_titles),
+            'missing_chapter_titles': task.missing_chapter_titles,
             'error': task.error,
             'result': task.result
         }
+
+
+def _normalize_chapter_key(title: str) -> str:
+    value = (title or '').strip().lower()
+    value = re.sub(r'\s+', '', value)
+    value = re.sub(r'[^\w\u4e00-\u9fff]', '', value)
+    return value
 
 
 def get_download_history() -> Dict:

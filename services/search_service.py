@@ -6,7 +6,12 @@ from .search_orchestrator import SearchOrchestrator
 logger = logging.getLogger(__name__)
 
 
-def search_novel(keyword: str) -> dict:
+def search_novel(
+    keyword: str,
+    source_id: str = None,
+    limit: int = 30,
+    only_available: bool = False,
+) -> dict:
     """
     Search for novels by keyword
 
@@ -40,7 +45,12 @@ def search_novel(keyword: str) -> dict:
         registry = SourceRegistry()
         orchestrator = SearchOrchestrator(registry)
 
-        result = orchestrator.search(keyword.strip())
+        result = orchestrator.search(
+            keyword.strip(),
+            preferred_source=source_id,
+            limit=limit,
+            only_available=only_available,
+        )
         return result
 
     except Exception as e:
