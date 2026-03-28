@@ -41,6 +41,16 @@ DOWNLOAD_DIR = os.path.join(BASE_DIR, 'downloads')
 LOG_DIR = os.path.join(BASE_DIR, 'logs')
 LOG_FILE = os.path.join(LOG_DIR, 'app.log')
 HISTORY_FILE = os.path.join(BASE_DIR, 'download_history.json')
+DYNAMIC_SOURCES_FILE = os.path.join(BASE_DIR, 'dynamic_sources.json')
+SOURCE_REVIEW_FILE = os.path.join(BASE_DIR, 'source_review_queue.json')
+
+# Seed URLs for semi-automatic source discovery.
+DISCOVERY_SEED_URLS = [
+	'https://www.bqg353.xyz',
+	'https://www.bqg356.cc',
+	'https://www.bqg128.com',
+	'https://www.bqg789.com',
+]
 
 # Flask configuration
 FLASK_HOST = '0.0.0.0'

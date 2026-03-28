@@ -3,6 +3,7 @@ import logging
 from typing import Dict, List
 import config
 from crawler.adapters import BQG353SourceAdapter, BaseSourceAdapter
+from .source_config_store import SourceConfigStore
 
 logger = logging.getLogger(__name__)
 
@@ -15,7 +16,13 @@ class SourceRegistry:
         self._build_from_config()
 
     def _build_from_config(self):
-        sources: Dict[str, Dict] = getattr(config, 'SOURCES', {}) or {}
+        static_sources: Dict[str, Dict] = getattr(config, 'SOURCES', {}) or {}
+        dynamic_sources: Dict[str, Dict] = SourceConfigStore().list_all()
+
+        sources: Dict[str, Dict] = {}
+        sources.update(static_sources)
+        # Dynamic sources override static entries with the same source_id.
+        sources.update(dynamic_sources)
 
         for source_id, source_cfg in sources.items():
             if not source_cfg.get('enabled', True):

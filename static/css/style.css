@@ -108,6 +108,25 @@ main {
     transition: transform 0.2s, box-shadow 0.2s;
 }
 
+#discoverBtn,
+#refreshReviewBtn {
+    padding: 15px 20px;
+    font-size: 15px;
+    font-weight: 600;
+    background: linear-gradient(135deg, #4f46e5 0%, #1d4ed8 100%);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+#discoverBtn:hover,
+#refreshReviewBtn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(79, 70, 229, 0.35);
+}
+
 #searchBtn:hover {
     transform: translateY(-2px);
     box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);

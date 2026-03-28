@@ -500,6 +500,192 @@ async function loadSources() {
     }
 }
 
+async function discoverSources() {
+    const keywordInput = document.getElementById('discoveryKeyword');
+    const status = document.getElementById('discoveryStatus');
+    const keyword = (keywordInput.value || '').trim() || '武动';
+
+    status.textContent = '正在发现候选来源...';
+    status.className = 'status-text info';
+
+    try {
+        const params = new URLSearchParams();
+        params.set('keyword', keyword);
+        params.set('limit', '10');
+
+        const response = await fetch(`/api/discovery/candidates?${params.toString()}`);
+        const data = await response.json();
+
+        if (!response.ok || !data.success) {
+            throw new Error(data.error || '候选来源发现失败');
+        }
+
+        renderDiscoveryCandidates(data.candidates || []);
+        status.textContent = `候选来源发现完成，共 ${data.total || 0} 个`;
+        status.className = 'status-text success';
+    } catch (error) {
+        console.error('Discover error:', error);
+        status.textContent = `发现失败: ${error.message}`;
+        status.className = 'status-text error';
+    }
+}
+
+function renderDiscoveryCandidates(candidates) {
+    const container = document.getElementById('discoveryContainer');
+    if (!Array.isArray(candidates) || candidates.length === 0) {
+        container.innerHTML = '<p class="empty-message">暂无候选来源</p>';
+        return;
+    }
+
+    container.innerHTML = '';
+    candidates.forEach(candidate => {
+        const item = document.createElement('div');
+        item.className = 'history-item';
+
+        const title = document.createElement('div');
+        title.className = 'history-item-title';
+        title.textContent = `${candidate.source_id} (${candidate.base_url})`;
+
+        const probe = candidate.probe || {};
+        const meta = document.createElement('div');
+        meta.className = 'history-item-meta';
+        meta.textContent = `评分:${probe.score || 0} | 建议启用:${probe.recommend_enable ? '是' : '否'} | 耗时:${probe.elapsed_ms || 0}ms`;
+
+        const submitBtn = document.createElement('button');
+        submitBtn.className = 'download-btn';
+        submitBtn.style.marginTop = '8px';
+        submitBtn.textContent = '提交审核';
+        submitBtn.onclick = () => submitCandidate(candidate);
+
+        item.appendChild(title);
+        item.appendChild(meta);
+        item.appendChild(submitBtn);
+        container.appendChild(item);
+    });
+}
+
+async function submitCandidate(candidate) {
+    try {
+        const response = await fetch('/api/review/submit', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                base_url: candidate.base_url,
+                source_id: candidate.source_id,
+                display_name: candidate.display_name || candidate.source_id,
+            }),
+        });
+        const data = await response.json();
+        if (!response.ok || !data.success) {
+            throw new Error(data.error || '提交审核失败');
+        }
+        showAlert('已提交审核队列', 'info');
+        loadReviewQueue();
+    } catch (error) {
+        console.error('Submit candidate error:', error);
+        showAlert(`提交失败: ${error.message}`, 'error');
+    }
+}
+
+async function loadReviewQueue() {
+    const container = document.getElementById('reviewContainer');
+    try {
+        const response = await fetch('/api/review/list');
+        const data = await response.json();
+        if (!response.ok || !data.success) {
+            throw new Error(data.error || '加载审核队列失败');
+        }
+
+        const items = data.items || [];
+        if (items.length === 0) {
+            container.innerHTML = '<p class="empty-message">暂无审核记录</p>';
+            return;
+        }
+
+        container.innerHTML = '';
+        items.slice().reverse().forEach(item => {
+            const row = document.createElement('div');
+            row.className = 'history-item';
+
+            const title = document.createElement('div');
+            title.className = 'history-item-title';
+            title.textContent = `#${item.id} ${item.source_id} (${item.status})`;
+
+            const meta = document.createElement('div');
+            meta.className = 'history-item-meta';
+            const probe = item.probe || {};
+            meta.textContent = `${item.base_url} | 评分:${probe.score || 0} | 建议启用:${probe.recommend_enable ? '是' : '否'}`;
+
+            row.appendChild(title);
+            row.appendChild(meta);
+
+            if (item.status === 'submitted') {
+                const approveBtn = document.createElement('button');
+                approveBtn.className = 'download-btn';
+                approveBtn.style.marginTop = '8px';
+                approveBtn.textContent = '审核通过并启用';
+                approveBtn.onclick = () => approveCandidate(item.id);
+
+                const rejectBtn = document.createElement('button');
+                rejectBtn.className = 'control-btn stop-btn';
+                rejectBtn.style.marginTop = '8px';
+                rejectBtn.style.marginLeft = '8px';
+                rejectBtn.textContent = '驳回';
+                rejectBtn.onclick = () => rejectCandidate(item.id);
+
+                row.appendChild(approveBtn);
+                row.appendChild(rejectBtn);
+            }
+
+            container.appendChild(row);
+        });
+    } catch (error) {
+        console.error('Review queue load error:', error);
+        container.innerHTML = `<p class="empty-message">加载审核队列失败: ${error.message}</p>`;
+    }
+}
+
+async function approveCandidate(itemId) {
+    try {
+        const response = await fetch(`/api/review/approve/${itemId}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ keyword: '武动' }),
+        });
+        const data = await response.json();
+        if (!response.ok || !data.success) {
+            throw new Error(data.error || '审核通过失败');
+        }
+
+        showAlert(`来源 ${data.source_id} 已启用并热加载`, 'info');
+        loadReviewQueue();
+        loadSources();
+    } catch (error) {
+        console.error('Approve error:', error);
+        showAlert(`审核通过失败: ${error.message}`, 'error');
+    }
+}
+
+async function rejectCandidate(itemId) {
+    try {
+        const response = await fetch(`/api/review/reject/${itemId}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ reason: 'Manually rejected from UI' }),
+        });
+        const data = await response.json();
+        if (!response.ok || !data.success) {
+            throw new Error(data.error || '驳回失败');
+        }
+
+        showAlert('候选来源已驳回', 'info');
+        loadReviewQueue();
+    } catch (error) {
+        console.error('Reject error:', error);
+        showAlert(`驳回失败: ${error.message}`, 'error');
+    }
+}
+
 // Show alert modal
 function showAlert(message, type = 'info') {
     const modal = document.getElementById('alertModal');
@@ -527,6 +713,7 @@ function closeAlert() {
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', function() {
     loadSources();
+    loadReviewQueue();
 
     // Load download history
     loadHistory();

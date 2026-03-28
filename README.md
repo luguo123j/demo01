@@ -155,6 +155,24 @@ SOURCES = {
 - **URL**: `GET /api/metrics`
 - **返回**: JSON 格式的搜索/下载成功率与来源时延指标
 
+### 候选来源发现接口
+- **URL**: `GET /api/discovery/candidates`
+- **参数**: `keyword` (可选)、`limit` (可选)
+- **返回**: 候选来源列表与探针评分（不自动启用）
+
+### 单来源探针接口
+- **URL**: `POST /api/discovery/probe`
+- **参数**: JSON，包含 `base_url`，可选 `keyword`
+- **返回**: 兼容性探针结果（搜索/目录/章节可读性评分）
+
+### 审核队列接口
+- **提交候选**: `POST /api/review/submit`
+- **查询队列**: `GET /api/review/list`
+- **审核通过并启用**: `POST /api/review/approve/<id>`
+- **驳回候选**: `POST /api/review/reject/<id>`
+
+审核通过时会先再次探针验证，验证通过后写入动态来源配置并热加载生效。
+
 ### 下载历史接口
 - **URL**: `GET /api/history`
 - **返回**: JSON 格式的历史记录

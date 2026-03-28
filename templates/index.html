@@ -40,6 +40,31 @@
                 <div id="searchStatus" class="status-text"></div>
             </section>
 
+            <section class="search-section">
+                <h2>来源发现与审核</h2>
+                <div class="search-box">
+                    <input
+                        type="text"
+                        id="discoveryKeyword"
+                        placeholder="输入探测关键词（默认武动）..."
+                        autocomplete="off"
+                    >
+                    <button id="discoverBtn" onclick="discoverSources()">
+                        <span>发现候选源</span>
+                    </button>
+                    <button id="refreshReviewBtn" onclick="loadReviewQueue()">
+                        <span>刷新审核队列</span>
+                    </button>
+                </div>
+                <div id="discoveryStatus" class="status-text"></div>
+                <div id="discoveryContainer" class="history-container">
+                    <p class="empty-message">暂无候选来源</p>
+                </div>
+                <div id="reviewContainer" class="history-container" style="margin-top:12px;">
+                    <p class="empty-message">暂无审核记录</p>
+                </div>
+            </section>
+
             <!-- Search Results Section -->
             <section id="resultsSection" class="results-section hidden">
                 <h2>搜索结果</h2>

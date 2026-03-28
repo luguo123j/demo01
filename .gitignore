@@ -12,6 +12,8 @@ env/
 # Runtime logs and local data
 logs/
 *.log
+dynamic_sources.json
+source_review_queue.json
 
 # OS / editor
 .DS_Store

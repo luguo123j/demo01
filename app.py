@@ -9,6 +9,10 @@ from services.search_service import search_novel
 from services.download_service import download_novel, get_download_status, get_download_history, pause_download, resume_download, stop_download
 from services.health_service import check_sources_health
 from services.metrics_service import metrics_store
+from services.source_discovery_service import discover_candidates
+from services.source_probe_service import probe_source
+from services.source_review_service import SourceReviewService
+from services.source_config_store import SourceConfigStore
 
 # Configure logging
 logging.basicConfig(
@@ -269,13 +273,19 @@ def api_history():
 def api_sources():
     """List configured source metadata for frontend filtering and diagnostics."""
     try:
+        merged_sources = {}
+        merged_sources.update(config.SOURCES)
+        merged_sources.update(SourceConfigStore().list_all())
+
         sources = []
-        for source_id, source_cfg in config.SOURCES.items():
+        for source_id, source_cfg in merged_sources.items():
             sources.append({
                 'source_id': source_id,
                 'source_name': source_cfg.get('display_name', source_id),
                 'enabled': bool(source_cfg.get('enabled', True)),
                 'weight': int(source_cfg.get('weight', 0)),
+                'base_url': source_cfg.get('base_url', ''),
+                'adapter': source_cfg.get('adapter', 'bqg353_api'),
             })
 
         return jsonify({
@@ -288,6 +298,107 @@ def api_sources():
             'success': False,
             'error': 'Internal server error'
         }), 500
+
+
+@app.route('/api/discovery/candidates', methods=['GET'])
+def api_discovery_candidates():
+    """Discover candidate sources from configured seed pool."""
+    try:
+        keyword = request.args.get('keyword', '武动').strip() or '武动'
+        limit = int(request.args.get('limit', 10))
+        result = discover_candidates(keyword=keyword, limit=limit)
+        return jsonify(result)
+    except Exception as e:
+        logger.error(f"Discovery API error: {e}")
+        return jsonify({'success': False, 'error': 'Internal server error'}), 500
+
+
+@app.route('/api/discovery/probe', methods=['POST'])
+def api_discovery_probe():
+    """Probe a candidate source and return compatibility score."""
+    try:
+        data = request.get_json() or {}
+        base_url = (data.get('base_url') or '').strip()
+        keyword = (data.get('keyword') or '武动').strip() or '武动'
+
+        if not base_url:
+            return jsonify({'success': False, 'error': 'Missing base_url parameter'}), 400
+
+        result = probe_source(base_url=base_url, keyword=keyword)
+        return jsonify(result)
+    except Exception as e:
+        logger.error(f"Probe API error: {e}")
+        return jsonify({'success': False, 'error': 'Internal server error'}), 500
+
+
+@app.route('/api/review/submit', methods=['POST'])
+def api_review_submit():
+    """Submit a candidate source into manual review queue."""
+    try:
+        data = request.get_json() or {}
+        base_url = (data.get('base_url') or '').strip()
+        display_name = (data.get('display_name') or '').strip()
+        source_id = (data.get('source_id') or '').strip()
+        keyword = (data.get('keyword') or '武动').strip() or '武动'
+
+        if not base_url or not source_id:
+            return jsonify({'success': False, 'error': 'base_url and source_id are required'}), 400
+
+        review_service = SourceReviewService()
+        result = review_service.submit_candidate(
+            base_url=base_url,
+            display_name=display_name or source_id,
+            source_id=source_id,
+            keyword=keyword,
+        )
+        return jsonify(result)
+    except Exception as e:
+        logger.error(f"Review submit API error: {e}")
+        return jsonify({'success': False, 'error': 'Internal server error'}), 500
+
+
+@app.route('/api/review/list', methods=['GET'])
+def api_review_list():
+    """List candidate review queue with optional status filter."""
+    try:
+        status = (request.args.get('status') or '').strip() or None
+        review_service = SourceReviewService()
+        return jsonify(review_service.list_candidates(status=status))
+    except Exception as e:
+        logger.error(f"Review list API error: {e}")
+        return jsonify({'success': False, 'error': 'Internal server error'}), 500
+
+
+@app.route('/api/review/approve/<int:item_id>', methods=['POST'])
+def api_review_approve(item_id: int):
+    """Approve a candidate, re-probe it, and hot-enable dynamic source config."""
+    try:
+        data = request.get_json() or {}
+        keyword = (data.get('keyword') or '武动').strip() or '武动'
+        review_service = SourceReviewService()
+        result = review_service.approve(item_id=item_id, keyword=keyword)
+        if result.get('success'):
+            return jsonify(result)
+        return jsonify(result), 400
+    except Exception as e:
+        logger.error(f"Review approve API error: {e}")
+        return jsonify({'success': False, 'error': 'Internal server error'}), 500
+
+
+@app.route('/api/review/reject/<int:item_id>', methods=['POST'])
+def api_review_reject(item_id: int):
+    """Reject a candidate source from review queue."""
+    try:
+        data = request.get_json() or {}
+        reason = (data.get('reason') or 'Manually rejected').strip() or 'Manually rejected'
+        review_service = SourceReviewService()
+        result = review_service.reject(item_id=item_id, reason=reason)
+        if result.get('success'):
+            return jsonify(result)
+        return jsonify(result), 404
+    except Exception as e:
+        logger.error(f"Review reject API error: {e}")
+        return jsonify({'success': False, 'error': 'Internal server error'}), 500
 
 
 @app.route('/api/health/sources', methods=['GET'])

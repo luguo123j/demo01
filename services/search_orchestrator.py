@@ -37,6 +37,7 @@ class SearchOrchestrator:
         merged: List[Dict] = []
         seen_keys = set()
         source_stats = []
+        errors = []
         with ThreadPoolExecutor(max_workers=min(8, len(adapters))) as pool:
             future_map = {
                 pool.submit(self._search_one_source, adapter, keyword): adapter
