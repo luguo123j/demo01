@@ -14,14 +14,25 @@ logger = logging.getLogger(__name__)
 class NovelCrawler:
     """Main crawler class for novel website"""
 
-    def __init__(self):
+    def __init__(
+        self,
+        base_url: str = None,
+        timeout: int = None,
+        max_retries: int = None,
+        request_delay: float = None,
+        source_id: str = 'default',
+    ):
         """Initialize novel crawler"""
-        self.base_url = config.BASE_URL
-        self.search_url = config.SEARCH_URL
+        self.base_url = base_url or config.BASE_URL
+        self.search_url = f"{self.base_url}/api/search"
+        self.source_id = source_id
+        timeout = timeout if timeout is not None else config.TIMEOUT
+        max_retries = max_retries if max_retries is not None else config.MAX_RETRIES
+        request_delay = request_delay if request_delay is not None else config.REQUEST_DELAY
         self.crawler = BaseCrawler(
-            timeout=config.TIMEOUT,
-            max_retries=config.MAX_RETRIES,
-            delay=config.REQUEST_DELAY
+            timeout=timeout,
+            max_retries=max_retries,
+            delay=request_delay
         )
         self.anti_spider = AntiSpider()
 
@@ -40,7 +51,7 @@ class NovelCrawler:
             NetworkError: If request fails
         """
         try:
-            logger.info(f"Searching for novel: {keyword}")
+            logger.info(f"Searching for novel on source {self.source_id}: {keyword}")
 
             # Prepare search parameters
             params = {'q': keyword}
@@ -199,7 +210,7 @@ class NovelCrawler:
             content = data.get('txt', '')
 
             # Add delay to avoid detection
-            delay(config.REQUEST_DELAY)
+            delay()
 
             logger.debug(f"Got chapter {chapter_id} content, length: {len(content)}")
             return content

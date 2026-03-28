@@ -36,7 +36,14 @@ class DownloadHistory:
         except Exception as e:
             logger.error(f"Failed to save download history: {e}")
 
-    def add(self, novel_title: str, novel_url: str, file_path: str, chapter_count: int = 0):
+    def add(
+        self,
+        novel_title: str,
+        novel_url: str,
+        file_path: str,
+        chapter_count: int = 0,
+        source_id: str = None,
+    ):
         """
         Add record to download history
 
@@ -51,6 +58,7 @@ class DownloadHistory:
             'novel_url': novel_url,
             'file_path': file_path,
             'chapter_count': chapter_count,
+            'source_id': source_id,
             'download_time': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         }
         self.history.append(record)

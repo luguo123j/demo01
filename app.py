@@ -78,6 +78,7 @@ def api_download():
         novel_url: URL of the novel
         start_chapter: Starting chapter number (optional, default 1)
         end_chapter: Ending chapter number (optional, default all)
+        source_id: Preferred source identifier (optional)
 
     Returns:
         JSON response with task ID
@@ -94,12 +95,15 @@ def api_download():
         novel_url = data['novel_url']
         start_chapter = int(data.get('start_chapter', 1))
         end_chapter = data.get('end_chapter')
+        source_id = data.get('source_id')
         if end_chapter:
             end_chapter = int(end_chapter)
 
-        logger.info(f"Download request: {novel_url} (chapters: {start_chapter}-{end_chapter or 'all'})")
+        logger.info(
+            f"Download request: {novel_url} (source={source_id or 'auto'}, chapters: {start_chapter}-{end_chapter or 'all'})"
+        )
 
-        task_id = download_novel(novel_url, start_chapter, end_chapter)
+        task_id = download_novel(novel_url, start_chapter, end_chapter, source_id)
 
         return jsonify({
             'success': True,

@@ -107,11 +107,11 @@ demo01/
 ### 搜索接口
 - **URL**: `GET /api/search`
 - **参数**: `keyword` (搜索关键词)
-- **返回**: JSON 格式的搜索结果
+- **返回**: JSON 格式的搜索结果，包含 `novels`、`sources`、`partial_success`
 
 ### 下载接口
 - **URL**: `POST /api/download`
-- **参数**: JSON 格式，包含 `novel_url`
+- **参数**: JSON 格式，包含 `novel_url`，可选 `source_id`、`start_chapter`、`end_chapter`
 - **返回**: JSON 格式，包含 `task_id`
 
 ### 状态查询接口

@@ -4,8 +4,7 @@ import threading
 import os
 import time
 from typing import Dict, Optional
-from crawler.novel_crawler import NovelCrawler
-from crawler.parser import parse_novel_title
+from .source_registry import SourceRegistry
 from .file_service import save_to_txt, DownloadHistory
 
 logger = logging.getLogger(__name__)
@@ -19,11 +18,19 @@ task_lock = threading.Lock()
 class DownloadTask:
     """Represents a download task with progress tracking"""
 
-    def __init__(self, task_id: str, novel_url: str, start_chapter: int = 1, end_chapter: Optional[int] = None):
+    def __init__(
+        self,
+        task_id: str,
+        novel_url: str,
+        start_chapter: int = 1,
+        end_chapter: Optional[int] = None,
+        source_id: Optional[str] = None,
+    ):
         self.task_id = task_id
         self.novel_url = novel_url
         self.start_chapter = start_chapter
         self.end_chapter = end_chapter
+        self.source_id = source_id
         self.status = 'pending'
         self.progress = 0
         self.total_chapters = 0
@@ -34,9 +41,16 @@ class DownloadTask:
         self.filename = None
         self.paused = False
         self.stopped = False
+        self.active_source_id = None
+        self.source_attempts = []
 
 
-def download_novel(novel_url: str, start_chapter: int = 1, end_chapter: Optional[int] = None) -> str:
+def download_novel(
+    novel_url: str,
+    start_chapter: int = 1,
+    end_chapter: Optional[int] = None,
+    source_id: Optional[str] = None,
+) -> str:
     """
     Start a novel download task
 
@@ -44,6 +58,7 @@ def download_novel(novel_url: str, start_chapter: int = 1, end_chapter: Optional
         novel_url: URL of the novel
         start_chapter: Starting chapter number (1-indexed)
         end_chapter: Ending chapter number (None for all chapters)
+        source_id: Preferred source identifier
 
     Returns:
         Task ID for tracking download progress
@@ -51,7 +66,7 @@ def download_novel(novel_url: str, start_chapter: int = 1, end_chapter: Optional
     import uuid
 
     task_id = str(uuid.uuid4())
-    task = DownloadTask(task_id, novel_url, start_chapter, end_chapter)
+    task = DownloadTask(task_id, novel_url, start_chapter, end_chapter, source_id)
 
     with task_lock:
         download_tasks[task_id] = task
@@ -71,15 +86,33 @@ def _download_worker(task: DownloadTask):
     Args:
         task: DownloadTask instance
     """
+    registry = None
     try:
         task.status = 'downloading'
-        logger.info(f"Starting download task: {task.task_id}")
+        logger.info(f"Starting download task: {task.task_id}, preferred_source={task.source_id}")
 
-        # Initialize crawler
-        crawler = NovelCrawler()
+        registry = SourceRegistry()
+        adapters = registry.list_with_preferred_first(task.source_id)
+        if not adapters:
+            raise RuntimeError('No enabled sources available for download')
 
-        # Get novel info
-        novel_info = crawler.get_novel_info(task.novel_url)
+        active_adapter = None
+        novel_info = None
+        last_error = None
+        for adapter in adapters:
+            try:
+                task.source_attempts.append({'source_id': adapter.source_id, 'stage': 'novel_info'})
+                novel_info = adapter.get_novel_info(task.novel_url)
+                active_adapter = adapter
+                task.active_source_id = adapter.source_id
+                break
+            except Exception as e:
+                last_error = e
+                logger.warning(f"Download source failed on novel info ({adapter.source_id}): {e}")
+
+        if not active_adapter or not novel_info:
+            raise RuntimeError(f"All sources failed to fetch novel info: {last_error}")
+
         task.novel_title = novel_info['title']
 
         # Get chapter list
@@ -107,7 +140,7 @@ def _download_worker(task: DownloadTask):
                 time.sleep(1)
 
             try:
-                content = crawler.get_chapter_content(chapter)
+                content = active_adapter.get_chapter_content(chapter)
                 content_dict[chapter['title']] = content
                 task.downloaded_chapters += 1
                 task.progress = int((task.downloaded_chapters / len(chapters)) * 100)
@@ -124,23 +157,24 @@ def _download_worker(task: DownloadTask):
 
             # Add to download history
             history = DownloadHistory()
-            history.add(task.novel_title, task.novel_url, filepath, len(chapters))
+            history.add(task.novel_title, task.novel_url, filepath, len(chapters), task.active_source_id)
 
             task.status = 'completed'
             task.progress = 100
             task.result = {
                 'filename': task.filename,
                 'filepath': filepath,
-                'chapter_count': len(chapters)
+                'chapter_count': len(chapters),
+                'source_id': task.active_source_id,
             }
             logger.info(f"Download completed: {task.filename}")
-
-        crawler.close()
-
     except Exception as e:
         logger.error(f"Download failed: {e}")
         task.status = 'error'
         task.error = str(e)
+    finally:
+        if registry:
+            registry.close_all()
 
 
 def pause_download(task_id: str):
@@ -208,6 +242,8 @@ def get_download_status(task_id: str) -> Optional[Dict]:
             'total_chapters': task.total_chapters,
             'downloaded_chapters': task.downloaded_chapters,
             'novel_title': task.novel_title,
+            'source_id': task.active_source_id,
+            'source_attempts': task.source_attempts,
             'error': task.error,
             'result': task.result
         }

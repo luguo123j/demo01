@@ -5,7 +5,7 @@ let currentFilename = null;
 let progressCheckInterval = null;
 let isPaused = false;
 let isStopped = false;
-let pendingNovelUrl = null;
+let pendingNovel = null;
 
 // Search novel function
 async function searchNovel() {
@@ -81,13 +81,18 @@ function renderResults(novels) {
         desc.className = 'novel-desc';
         desc.textContent = novel.description || '暂无简介';
 
+        const source = document.createElement('div');
+        source.className = 'novel-author';
+        source.textContent = `来源: ${novel.source_name || novel.source_id || '默认源'}`;
+
         const downloadBtn = document.createElement('button');
         downloadBtn.className = 'download-btn';
         downloadBtn.textContent = '下载';
-        downloadBtn.onclick = () => showChapterRangeModal(novel.url);
+        downloadBtn.onclick = () => showChapterRangeModal(novel);
 
         card.appendChild(title);
         card.appendChild(author);
+        card.appendChild(source);
         card.appendChild(desc);
         card.appendChild(downloadBtn);
         resultsContainer.appendChild(card);
@@ -97,8 +102,8 @@ function renderResults(novels) {
 }
 
 // Show chapter range modal
-function showChapterRangeModal(novelUrl) {
-    pendingNovelUrl = novelUrl;
+function showChapterRangeModal(novel) {
+    pendingNovel = novel;
     const modal = document.getElementById('chapterRangeModal');
     modal.classList.remove('hidden');
 }
@@ -117,13 +122,13 @@ function confirmChapterRange() {
 
     closeChapterRangeModal();
 
-    if (pendingNovelUrl) {
-        downloadNovel(pendingNovelUrl, startChapter, endChapter);
+    if (pendingNovel && pendingNovel.url) {
+        downloadNovel(pendingNovel.url, startChapter, endChapter, pendingNovel.source_id || null);
     }
 }
 
 // Download novel function
-async function downloadNovel(novelUrl, startChapter = 1, endChapter = null) {
+async function downloadNovel(novelUrl, startChapter = 1, endChapter = null, sourceId = null) {
     const progressSection = document.getElementById('progressSection');
     const downloadComplete = document.getElementById('downloadComplete');
 
@@ -136,7 +141,8 @@ async function downloadNovel(novelUrl, startChapter = 1, endChapter = null) {
             body: JSON.stringify({
                 novel_url: novelUrl,
                 start_chapter: startChapter,
-                end_chapter: endChapter
+                end_chapter: endChapter,
+                source_id: sourceId
             })
         });
 
@@ -407,7 +413,8 @@ function renderHistory(history) {
         const meta = document.createElement('div');
         meta.className = 'history-item-meta';
         const chapters = item.chapter_count ? `${item.chapter_count}章` : '未知章数';
-        meta.textContent = `${chapters} - ${item.download_time || '未知时间'}`;
+        const source = item.source_id ? `来源:${item.source_id}` : '来源:默认';
+        meta.textContent = `${chapters} - ${source} - ${item.download_time || '未知时间'}`;
 
         historyItem.appendChild(title);
         historyItem.appendChild(meta);

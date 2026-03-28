@@ -1,7 +1,7 @@
 """Search service for novel search functionality"""
 import logging
-from crawler.novel_crawler import NovelCrawler
-from crawler.base_crawler import SearchNotFoundError
+from .source_registry import SourceRegistry
+from .search_orchestrator import SearchOrchestrator
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +29,7 @@ def search_novel(keyword: str) -> dict:
             ]
         }
     """
+    registry = None
     try:
         if not keyword or not keyword.strip():
             return {
@@ -36,26 +37,11 @@ def search_novel(keyword: str) -> dict:
                 'error': 'Please enter a novel name'
             }
 
-        # Initialize crawler
-        crawler = NovelCrawler()
+        registry = SourceRegistry()
+        orchestrator = SearchOrchestrator(registry)
 
-        # Search novels
-        novels = crawler.search_novel(keyword.strip())
-
-        # Close crawler
-        crawler.close()
-
-        return {
-            'success': True,
-            'novels': novels
-        }
-
-    except SearchNotFoundError as e:
-        logger.warning(f"Search not found: {e}")
-        return {
-            'success': False,
-            'error': f'No novels found for "{keyword}"'
-        }
+        result = orchestrator.search(keyword.strip())
+        return result
 
     except Exception as e:
         logger.error(f"Error searching novel: {e}")
@@ -63,3 +49,6 @@ def search_novel(keyword: str) -> dict:
             'success': False,
             'error': f'Error searching: {str(e)}'
         }
+    finally:
+        if registry:
+            registry.close_all()

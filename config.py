@@ -11,6 +11,31 @@ TIMEOUT = 30
 MAX_RETRIES = 3
 REQUEST_DELAY = 1  # seconds between requests
 
+# Multi-source configuration (Phase 1)
+# Existing BASE_URL/SEARCH_URL are kept for backward compatibility.
+SOURCES = {
+	'bqg353': {
+		'enabled': True,
+		'adapter': 'bqg353_api',
+		'display_name': '笔趣阁 353',
+		'base_url': BASE_URL,
+		'weight': 100,
+		'timeout': TIMEOUT,
+		'max_retries': MAX_RETRIES,
+		'request_delay': REQUEST_DELAY,
+	},
+	'bqg356': {
+		'enabled': True,
+		'adapter': 'bqg353_api',
+		'display_name': '笔趣阁 356',
+		'base_url': 'https://www.bqg356.cc',
+		'weight': 90,
+		'timeout': TIMEOUT,
+		'max_retries': MAX_RETRIES,
+		'request_delay': REQUEST_DELAY,
+	}
+}
+
 # File paths
 DOWNLOAD_DIR = os.path.join(BASE_DIR, 'downloads')
 LOG_DIR = os.path.join(BASE_DIR, 'logs')
